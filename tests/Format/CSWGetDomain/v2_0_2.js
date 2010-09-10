@@ -1,5 +1,5 @@
 var csw_request = 
-'<csw:GetDomain xmlns:csw="http://www.opengis.net/cat/csw/2.0.2" service="CSW" version="2.0.2">' +
+'<csw:GetDomain xmlns:csw="http://www.opengis.net/cat/csw/2.0.2" service="CSW" version="2.0.2" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' +
   '<csw:PropertyName>type</csw:PropertyName>' +
 '</csw:GetDomain>';
 
