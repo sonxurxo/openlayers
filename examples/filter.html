@@ -84,6 +84,10 @@ filter = new OpenLayers.Filter.Logical({
             type: OpenLayers.Filter.Spatial.BBOX,
             value: new OpenLayers.Bounds(-180, -90, 180, 90),
             projection: "EPSG:4326"
+        }),
+        new OpenLayers.Filter.Comparison({
+            type: OpenLayers.Filter.Comparison.IS_NULL,
+            property: "mama"
         })
     ]
 });
