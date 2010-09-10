@@ -11,7 +11,8 @@
     <script type="text/javascript">
         var map;
 
-        OpenLayers.ProxyHost = "proxy.cgi?url=";
+        //OpenLayers.ProxyHost = "proxy.cgi?url=";
+        OpenLayers.ProxyHost = "/cgi-bin/proxy.cgi?url=";
         OpenLayers.Util.extend(OpenLayers.Lang.en,
             {
                 'SOSClientType': "Type",
@@ -24,97 +25,66 @@
         OpenLayers.SOSClient = OpenLayers.Class({
             url: null,
             map: null,
-            capsformat: new OpenLayers.Format.SOSCapabilities(),
             obsformat: new OpenLayers.Format.SOSGetObservation(),
             initialize: function (options) {
                 OpenLayers.Util.extend(this, options);
-                var params = {'service': 'SOS', 'request': 'GetCapabilities'};
-                var paramString = OpenLayers.Util.getParameterString(params);
-                url = OpenLayers.Util.urlAppend(this.url, paramString);
-                OpenLayers.Request.GET({url: url,
-                    success: this.parseSOSCaps, scope: this});
-            },
-            getFois: function() {
-                var result = [];
-                this.offeringCount = 0; 
-                for (var name in this.SOSCapabilities.contents.offeringList) {
-                    var offering = this.SOSCapabilities.contents.offeringList[name];
-                    this.offeringCount++;
-                    for (var i=0, len=offering.featureOfInterestIds.length; i<len; i++) {
-                        var foi = offering.featureOfInterestIds[i];
-                        if (OpenLayers.Util.indexOf(result, foi) === -1) {
-                            result.push(foi);
-                        }
-                    }
-                }
-                return result;
-            },
-            parseSOSCaps: function(response) {
-                // cache capabilities for future use
-                this.SOSCapabilities = this.capsformat.read(response.responseXML || response.responseText);
-                this.layer = new OpenLayers.Layer.Vector("Stations", {
-                    strategies: [new OpenLayers.Strategy.Fixed()],
-                    protocol: new OpenLayers.Protocol.SOS({
-                        formatOptions: {internalProjection: map.getProjectionObject()},
-                        url: this.url,
-                        fois: this.getFois()
-                    })
-                });
-                this.map.addLayer(this.layer);
-                this.ctrl = new OpenLayers.Control.SelectFeature(this.layer,
-                    {scope: this, onSelect: this.onFeatureSelect});
-                this.map.addControl(this.ctrl);
-                this.ctrl.activate();
             },
             getTitleForObservedProperty: function(property) {
                 for (var name in this.SOSCapabilities.contents.offeringList) {
                     var offering = this.SOSCapabilities.contents.offeringList[name];
-                    if (offering.observedProperties[0] === property) {
-                        return offering.name;
+                    for (var observedProperty in offering.observedProperties) {
+                        if (offering.observedProperties[observedProperty] === property) {
+                            return offering.name;
+                        }
                     }
                 }
             },
             showPopup: function(response) {
                 this.count++;
                 var output = this.obsformat.read(response.responseXML || response.responseText);
-                if (output.measurements.length > 0) {
+                if (output.measurements[0]) {
                     this.html += '<tr>';
                     this.html += '<td width="100">'+this.getTitleForObservedProperty(output.measurements[0].observedProperty)+'</td>';
                     this.html += '<td>'+output.measurements[0].samplingTime.timeInstant.timePosition+'</td>';
                     this.html += '<td>'+output.measurements[0].result.value + ' ' + output.measurements[0].result.uom + '</td>';
                     this.html += '</tr>';
-                }
-                // check if we are done
-                if (this.count === this.numRequests) {
-                    var html = '<table cellspacing="10"><tbody>';
-                    html += '<tr>';
-                    html += '<th><b>'+OpenLayers.i18n('SOSClientType')+'</b></th>';
-                    html += '<th><b>'+OpenLayers.i18n('SOSClientTime')+'</b></th>';
-                    html += '<th><b>'+OpenLayers.i18n('SOSClientLastvalue')+'</b></th>';
-                    html += '</tr>';
-                    html += this.html;
-                    html += '</tbody></table>';
-                    var popup = new OpenLayers.Popup.FramedCloud("sensor",
-                    this.feature.geometry.getBounds().getCenterLonLat(),
-                        null,
-                        html,
-                        null,
-                        true,
-                        function(e) {
-                            this.hide();
-                            OpenLayers.Event.stop(e);
-                            // unselect so popup can be shown again
-                            this.map.getControlsByClass('OpenLayers.Control.SelectFeature')[0].unselectAll();
-                        } 
-                    );
-                    this.feature.popup = popup;
-                    this.map.addPopup(popup);
+                    // check if we are done
+                    if (this.count === this.numRequests) {
+                        var html = '<table cellspacing="10"><tbody>';
+                        html += '<tr>';
+                        html += '<th><b>'+OpenLayers.i18n('SOSClientType')+'</b></th>';
+                        html += '<th><b>'+OpenLayers.i18n('SOSClientTime')+'</b></th>';
+                        html += '<th><b>'+OpenLayers.i18n('SOSClientLastvalue')+'</b></th>';
+                        html += '</tr>';
+                        html += this.html;
+                        html += '</tbody></table>';
+                        var popup = new OpenLayers.Popup.FramedCloud("sensor",
+                        this.feature.geometry.getBounds().getCenterLonLat(),
+                            null,
+                            html,
+                            null,
+                            true,
+                            function(e) {
+                                this.hide();
+                                OpenLayers.Event.stop(e);
+                                // unselect so popup can be shown again
+                                this.map.getControlsByClass('OpenLayers.Control.SelectFeature')[0].unselectAll();
+                            } 
+                        );
+                        this.feature.popup = popup;
+                        this.map.addPopup(popup);
+                    }
                 }
             },
             onFeatureSelect: function(feature) {
                 this.feature = feature;
                 this.count = 0;
                 this.html = '';
+                this.SOSCapabilities = OpenLayers.Layer.SOS.prototype.sosCache[feature.layer.id];
+                this.offeringCount = 0; 
+                for (var name in this.SOSCapabilities.contents.offeringList) {
+                    this.offeringCount++;
+                }
                 this.numRequests = this.offeringCount;
                 if (!this.responseFormat) {
                     for (format in this.SOSCapabilities.operationsMetadata.GetObservation.parameters.responseFormat.allowedValues) {
@@ -131,15 +101,14 @@
                         eventTime: 'latest',
                         resultModel: 'om:Measurement',
                         responseMode: 'inline',
-                        procedure: feature.attributes.id,
+                        procedures: [feature.attributes.id],
                         offering: name,
-                        observedProperty: offering.observedProperties[0],
+                        observedProperties: offering.observedProperties,
                         responseFormat: this.responseFormat
                     });
                     OpenLayers.Request.POST({
                         url: this.url,
                         scope: this,
-                        failure: this.showPopup,
                         success: this.showPopup,
                         data: xml
                     });
@@ -152,15 +121,17 @@
 
         function init(){
             map = new OpenLayers.Map( 'map' );
-            var baseLayer = new OpenLayers.Layer.WMS("Test Layer", "http://vmap0.tiles.osgeo.org/wms/vmap0?", {
+            var url  = 'http://v-swe.uni-muenster.de:8080/WeatherSOS/sos?';
+            var sosLayer = new OpenLayers.Layer.SOS("Stations", url);
+            var sos = new OpenLayers.SOSClient({map: map, url: url});
+            var baseLayer = new OpenLayers.Layer.WMS("Test Layer", "http://labs.metacarta.com/wms/vmap0?", {
                 layers: "basic"}, {singleTile: true});
-
-            var sos = new OpenLayers.SOSClient({map: map, url: 'http://v-swe.uni-muenster.de:8080/WeatherSOS/sos?'});
-
-            map.addLayers([baseLayer]);
+            map.addLayers([baseLayer, sosLayer]);
             map.setCenter(new OpenLayers.LonLat(5, 45), 4);
             map.addControl( new OpenLayers.Control.LayerSwitcher() );
             map.addControl( new OpenLayers.Control.MousePosition() );
+            var select = new OpenLayers.Control.SelectFeature(sosLayer, {autoActivate: true, scope: sos, onSelect: sos.onFeatureSelect});
+            map.addControl(select);
         }
     </script>
   </head>
